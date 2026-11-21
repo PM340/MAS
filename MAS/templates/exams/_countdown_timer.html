@@ -1,0 +1,18 @@
+<div class="card p-3 mb-3 border-0 shadow-sm" id="countdownTimerCard">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="text-uppercase fw-bold small text-secondary" style="letter-spacing: 0.05em;">
+            <i class="bi bi-hourglass-split me-1 text-primary"></i>Time Remaining
+        </span>
+        <span class="badge bg-light text-dark border" id="timerStatusBadge">Active</span>
+    </div>
+    <div class="d-flex align-items-baseline justify-content-between mb-2">
+        <div id="timerSidebarDisplay" class="fw-bold font-monospace fs-2 text-dark lh-1">--:--</div>
+        <div class="small text-muted">of {{ exam.duration_minutes }} min</div>
+    </div>
+    <div class="progress" style="height: 8px;" role="progressbar" aria-label="Exam time remaining">
+        <div id="timerProgressBar" class="progress-bar bg-primary transition-all" style="width: 100%;"></div>
+    </div>
+    <div id="timerLowWarning" class="small text-danger fw-semibold mt-2 d-none">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>Final minute! Exam will auto-submit at 00:00.
+    </div>
+</div>

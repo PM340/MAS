@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block title %}Format-Based Word & PDF Paper Generator — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-0"><i class="bi bi-file-earmark-richtext text-primary me-2"></i>Upload Paper Format &rarr; Generate Word &amp; PDF</h3>
+        <p class="text-muted small mb-0">
+            Upload your institution's question paper format (<code>.docx</code>, <code>.pdf</code>, or <code>.txt</code>) and automatically generate formatted Word (<code>.docx</code>) and PDF (<code>.pdf</code>) question papers.
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'download_sample_format_docx' %}" class="btn btn-outline-primary">
+            <i class="bi bi-download me-1"></i>Download Sample Format (.docx)
+        </a>
+        <a href="{% url 'exam_list' %}" class="btn btn-outline-secondary">Back to Exams</a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card p-4">
+            <h5 class="fw-bold mb-3">1. Upload Paper Format Template</h5>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">{{ form.exam.label }}</label>
+                    {{ form.exam }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">{{ form.format_file.label }}</label>
+                    {{ form.format_file }}
+                    <div class="form-text">
+                        Include institution heading, general instructions, and section headings like <code>SECTION A — MCQ</code>, <code>SECTION B — FILL IN THE BLANKS</code>, <code>SECTION C — SHORT ANSWER</code>.
+                        Optional Word placeholders: <code>{% verbatim %}{{TITLE}}, {{CLASS}}, {{SUBJECT}}, {{DURATION}}, {{MARKS}}{% endverbatim %}</code>.
+                    </div>
+                </div>
+                <div class="form-check mb-4">
+                    {{ form.include_answer_key }}
+                    <label class="form-check-label fw-semibold" for="{{ form.include_answer_key.id_for_label }}">
+                        {{ form.include_answer_key.label }}
+                    </label>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 fw-semibold">
+                    <i class="bi bi-gear-wide-connected me-1"></i>Parse Format &amp; Prepare Word + PDF
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card p-4 h-100">
+            <h5 class="fw-bold mb-3">2. Download Question Paper in Word &amp; PDF</h5>
+
+            {% if fmt_config %}
+            <div class="p-3 bg-light border rounded-3 mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Uploaded Format Loaded</span>
+                    <span class="small text-muted">Source: <strong>{{ fmt_config.source_filename }}</strong></span>
+                </div>
+                <div class="small">
+                    <div><strong>Institution Header:</strong> {{ fmt_config.institution }}</div>
+                    {% if fmt_config.subtitle %}<div><strong>Subtitle:</strong> {{ fmt_config.subtitle }}</div>{% endif %}
+                    <div class="mt-2"><strong>Detected Sections ({{ fmt_config.sections|length }}):</strong></div>
+                    <ul class="mb-1 ps-3">
+                        {% for sec in fmt_config.sections %}
+                        <li>{{ sec.title }} <span class="badge bg-secondary">{{ sec.qtype }}</span></li>
+                        {% endfor %}
+                    </ul>
+                    <div><strong>Footer:</strong> {{ fmt_config.footer_note }}</div>
+                </div>
+            </div>
+            {% else %}
+            <div class="alert alert-info small mb-4">
+                <i class="bi bi-info-circle me-1"></i>
+                No custom format uploaded yet — you can upload one on the left (or download the sample <code>.docx</code> format), or immediately download using the standard university layout below.
+            </div>
+            {% endif %}
+
+            {% if selected_exam %}
+            <div class="border rounded-3 p-3 mb-4">
+                <div class="small text-muted">Selected Exam</div>
+                <h6 class="fw-bold mb-1">{{ selected_exam.title }}</h6>
+                <div class="small text-muted">
+                    {{ selected_exam.academic_class.name }} &middot;
+                    {{ selected_exam.subject.code }} - {{ selected_exam.subject.name }} &middot;
+                    {{ selected_exam.question_count }} Questions &middot; {{ selected_exam.total_marks }} Marks
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <a href="{% url 'download_formatted_paper' selected_exam.id 'docx' %}?answer_key={% if include_answer_key %}1{% else %}0{% endif %}"
+                       class="btn btn-outline-primary w-100 py-3 fw-semibold">
+                        <i class="bi bi-file-earmark-word fs-4 d-block mb-1"></i>
+                        Download Word (.docx)
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <a href="{% url 'download_formatted_paper' selected_exam.id 'pdf' %}?answer_key={% if include_answer_key %}1{% else %}0{% endif %}"
+                       class="btn btn-outline-danger w-100 py-3 fw-semibold">
+                        <i class="bi bi-file-earmark-pdf fs-4 d-block mb-1"></i>
+                        Download PDF (.pdf)
+                    </a>
+                </div>
+                <div class="col-md-4">
+                    <a href="{% url 'download_formatted_paper' selected_exam.id 'both' %}?answer_key={% if include_answer_key %}1{% else %}0{% endif %}"
+                       class="btn btn-success w-100 py-3 fw-semibold">
+                        <i class="bi bi-file-earmark-zip fs-4 d-block mb-1"></i>
+                        Both Word + PDF (.zip)
+                    </a>
+                </div>
+            </div>
+
+            <div class="mt-3 pt-3 border-top d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                <span class="text-muted">Need an Answer Key version immediately?</span>
+                <div class="d-flex gap-2">
+                    <a href="{% url 'download_formatted_paper' selected_exam.id 'docx' %}?answer_key=1" class="btn btn-sm btn-outline-secondary">Word + Key</a>
+                    <a href="{% url 'download_formatted_paper' selected_exam.id 'pdf' %}?answer_key=1" class="btn btn-sm btn-outline-secondary">PDF + Key</a>
+                </div>
+            </div>
+            {% else %}
+            <div class="text-muted text-center py-4">No exams exist yet. Create an exam first to generate Word &amp; PDF papers.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

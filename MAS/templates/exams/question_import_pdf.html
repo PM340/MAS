@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% block title %}Import Questions from PDF — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-0"><i class="bi bi-file-earmark-pdf text-danger me-2"></i>Import Questions from PDF (Auto Math Recognition)</h3>
+        <p class="text-muted small mb-0">
+            Upload a question paper or notes PDF. The system automatically detects questions, MCQs, and mathematical symbols (<code>∫, ∑, √, ≤, π, α, fractions</code>) into MathJax LaTeX.
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'question_create' %}" class="btn btn-outline-primary">Manual Add</a>
+        <a href="{% url 'question_bank' %}" class="btn btn-outline-secondary">Back to Question Bank</a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="card p-4">
+            <h5 class="fw-bold mb-3">1. Upload Question PDF</h5>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">{{ form.subject.label }}</label>
+                    {{ form.subject }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">{{ form.pdf_file.label }}</label>
+                    {{ form.pdf_file }}
+                    <div class="form-text">Supports numbered questions (<code>1.</code>, <code>Q1.</code>), options <code>(A)-(D)</code>, blanks <code>____</code>, and math symbols.</div>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label fw-semibold">{{ form.extraction_mode.label }}</label>
+                    {{ form.extraction_mode }}
+                    <div class="form-text"><strong>Auto</strong> uses the instant offline <code>pypdf</code> math parser for text PDFs (zero quota usage) and invokes Gemini AI only for scanned/image PDFs.</div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 fw-semibold">
+                    <i class="bi bi-magic me-1"></i>Recognize Questions &amp; Math
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        {% if extracted_questions %}
+        <div class="card p-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 border-bottom pb-3 mb-3">
+                <div>
+                    <h5 class="fw-bold mb-0">2. Review &amp; Save Recognized Questions ({{ extracted_questions|length }})</h5>
+                    <div class="small text-muted">
+                        File: <strong>{{ source_filename }}</strong> &middot;
+                        Subject: <strong>{{ preview_subject }}</strong> &middot;
+                        Engine: <span class="badge bg-info text-dark">{{ engine_used }}</span>
+                    </div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="toggleAllPdfQuestions(true)">Select All</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAllPdfQuestions(false)">Deselect All</button>
+                    <a href="{% url 'question_import_pdf' %}?clear=1" class="btn btn-sm btn-outline-danger">Clear Preview</a>
+                </div>
+            </div>
+
+            <form method="post" id="pdfBulkSaveForm">
+                {% csrf_token %}
+                <input type="hidden" name="save_selected" value="1">
+                <input type="hidden" name="subject_id" value="{{ preview_subject.id }}">
+                <input type="hidden" name="row_count" value="{{ extracted_questions|length }}">
+                <input type="hidden" name="questions_payload" id="questionsPayloadInput" value="">
+
+                <div class="d-flex flex-column gap-3 mb-4">
+                    {% for item in extracted_questions %}
+                    <div class="border rounded-3 p-3 bg-light pdf-question-row" data-row-index="{{ forloop.counter0 }}">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="include_{{ forloop.counter0 }}" value="1" id="chk_{{ forloop.counter0 }}" checked>
+                                <label class="form-check-label fw-bold text-primary" for="chk_{{ forloop.counter0 }}">
+                                    Include Question #{{ forloop.counter }}
+                                </label>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <select name="question_type_{{ forloop.counter0 }}" class="form-select form-select-sm" style="width: auto;">
+                                    <option value="MCQ" {% if item.question_type == 'MCQ' %}selected{% endif %}>MCQ</option>
+                                    <option value="FITB" {% if item.question_type == 'FITB' %}selected{% endif %}>Fill in the Blanks</option>
+                                    <option value="SHORT" {% if item.question_type == 'SHORT' %}selected{% endif %}>Short Answer</option>
+                                </select>
+                                <input type="number" name="marks_{{ forloop.counter0 }}" value="{{ item.marks }}" min="1" class="form-control form-control-sm" style="width: 85px;" title="Marks">
+                                <select name="difficulty_{{ forloop.counter0 }}" class="form-select form-select-sm" style="width: auto;">
+                                    <option value="EASY" {% if item.difficulty == 'EASY' %}selected{% endif %}>Easy</option>
+                                    <option value="MEDIUM" {% if item.difficulty == 'MEDIUM' %}selected{% endif %}>Medium</option>
+                                    <option value="HARD" {% if item.difficulty == 'HARD' %}selected{% endif %}>Hard</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold mb-1">Question Prompt (LaTeX MathJax)</label>
+                            <textarea name="prompt_{{ forloop.counter0 }}" class="form-control form-control-sm math-prompt-edit" rows="2" data-preview="prev_{{ forloop.counter0 }}">{{ item.prompt }}</textarea>
+                        </div>
+                        <div class="p-2 bg-white border rounded small mb-2">
+                            <span class="text-muted fw-semibold me-1">Math Preview:</span>
+                            <span id="prev_{{ forloop.counter0 }}">{{ item.prompt }}</span>
+                        </div>
+
+                        <div class="row g-2 mb-2">
+                            <div class="col-md-6">
+                                <input type="text" name="option_a_{{ forloop.counter0 }}" value="{{ item.option_a }}" class="form-control form-control-sm" placeholder="Option A (for MCQ)">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="text" name="option_b_{{ forloop.counter0 }}" value="{{ item.option_b }}" class="form-control form-control-sm" placeholder="Option B (for MCQ)">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="text" name="option_c_{{ forloop.counter0 }}" value="{{ item.option_c }}" class="form-control form-control-sm" placeholder="Option C (optional)">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="text" name="option_d_{{ forloop.counter0 }}" value="{{ item.option_d }}" class="form-control form-control-sm" placeholder="Option D (optional)">
+                            </div>
+                        </div>
+
+                        <div class="row g-2">
+                            <div class="col-md-3">
+                                <select name="correct_option_{{ forloop.counter0 }}" class="form-select form-select-sm">
+                                    <option value="">Correct MCQ Opt</option>
+                                    <option value="A" {% if item.correct_option == 'A' %}selected{% endif %}>Option A</option>
+                                    <option value="B" {% if item.correct_option == 'B' %}selected{% endif %}>Option B</option>
+                                    <option value="C" {% if item.correct_option == 'C' %}selected{% endif %}>Option C</option>
+                                    <option value="D" {% if item.correct_option == 'D' %}selected{% endif %}>Option D</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <input type="text" name="correct_answer_text_{{ forloop.counter0 }}" value="{{ item.correct_answer_text }}" class="form-control form-control-sm" placeholder="FITB Exact Answer(s)">
+                            </div>
+                            <div class="col-md-5">
+                                <input type="text" name="model_answer_{{ forloop.counter0 }}" value="{{ item.model_answer }}" class="form-control form-control-sm" placeholder="Short Answer Model Key">
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <button type="submit" class="btn btn-success btn-lg w-100 fw-semibold">
+                    <i class="bi bi-check2-all me-1"></i>Save Selected Questions to Question Bank
+                </button>
+            </form>
+        </div>
+        {% else %}
+        <div class="card p-5 text-center text-muted h-100 d-flex flex-column justify-content-center">
+            <i class="bi bi-file-earmark-pdf fs-1 text-primary mb-3"></i>
+            <h5 class="fw-bold text-dark">Upload a PDF to Auto-Extract Questions</h5>
+            <p class="small mb-0 mx-auto" style="max-width: 480px;">
+                Upload any syllabus test, worksheet, or question bank PDF. Acadex recognizes numbered questions, options (A–D), fill-in-the-blanks, and math expressions (converting symbols like <code>∫, ∑, √, ≤, π</code> into MathJax LaTeX) so you can review and add them in one click.
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleAllPdfQuestions(checked) {
+        document.querySelectorAll('.pdf-question-row input[type="checkbox"]').forEach(cb => {
+            cb.checked = checked;
+        });
+    }
+
+    document.querySelectorAll('.math-prompt-edit').forEach(el => {
+        el.addEventListener('input', () => {
+            const target = document.getElementById(el.dataset.preview);
+            if (!target) return;
+            target.textContent = el.value;
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise([target]).catch(() => {});
+            }
+        });
+    });
+
+    const bulkSaveForm = document.getElementById('pdfBulkSaveForm');
+    if (bulkSaveForm) {
+        bulkSaveForm.addEventListener('submit', function () {
+            const payload = [];
+            const rows = bulkSaveForm.querySelectorAll('.pdf-question-row');
+            rows.forEach(row => {
+                const idx = row.dataset.rowIndex;
+                const chk = row.querySelector(`[name="include_${idx}"]`);
+                if (chk && chk.checked) {
+                    const getVal = (prefix) => {
+                        const el = row.querySelector(`[name="${prefix}_${idx}"]`);
+                        return el ? el.value : '';
+                    };
+                    payload.push({
+                        question_type: getVal('question_type'),
+                        marks: getVal('marks'),
+                        difficulty: getVal('difficulty'),
+                        prompt: getVal('prompt'),
+                        option_a: getVal('option_a'),
+                        option_b: getVal('option_b'),
+                        option_c: getVal('option_c'),
+                        option_d: getVal('option_d'),
+                        correct_option: getVal('correct_option'),
+                        correct_answer_text: getVal('correct_answer_text'),
+                        model_answer: getVal('model_answer'),
+                    });
+                }
+                // Disable per-row form controls before POST so even 500+ questions transmit in 1 JSON field
+                row.querySelectorAll('input, select, textarea').forEach(el => {
+                    el.disabled = true;
+                });
+            });
+            document.getElementById('questionsPayloadInput').value = JSON.stringify(payload);
+        });
+    }
+</script>
+{% endblock %}

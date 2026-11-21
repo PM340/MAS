@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% load lms_extras %}
+{% block title %}Assignments — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Assignments Module</h3>
+        <p class="text-muted small mb-0">
+            {% if user.is_student %}Upload coursework (.pdf, .docx, images) and review teacher feedback.
+            {% else %}Publish class assignments, download student files, and grade submissions.{% endif %}
+        </p>
+    </div>
+    {% if not user.is_student %}
+    <a href="{% url 'assignment_create' %}" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Create Assignment
+    </a>
+    {% endif %}
+</div>
+
+<div class="row g-3">
+    {% for a in assignments %}
+    <div class="col-md-6">
+        <div class="card h-100 p-4">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <span class="badge bg-primary">{{ a.academic_class.name }}</span>
+                    <span class="badge bg-light text-dark border">{{ a.subject.code }}</span>
+                </div>
+                <span class="small {% if a.is_overdue %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+                    Due: {{ a.due_date|date:"M d, Y H:i" }}
+                </span>
+            </div>
+            <h5 class="fw-bold mb-1">{{ a.title }}</h5>
+            <p class="small text-muted mb-3">{{ a.description|truncatewords:28 }}</p>
+
+            <div class="mt-auto d-flex justify-content-between align-items-center">
+                <span class="small fw-semibold">Max Marks: {{ a.max_marks }}</span>
+                {% if user.is_student %}
+                    {% with sub=submissions_map|get_item:a.id %}
+                    <div class="d-flex align-items-center gap-2">
+                        {% if sub and sub.is_graded %}
+                        <span class="badge bg-success">{{ sub.marks_obtained }}/{{ a.max_marks }}</span>
+                        {% elif sub %}
+                        <span class="badge bg-info text-dark">Submitted</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                        {% endif %}
+                        <a href="{% url 'assignment_detail' a.id %}" class="btn btn-sm btn-primary">Open</a>
+                    </div>
+                    {% endwith %}
+                {% else %}
+                    <a href="{% url 'assignment_detail' a.id %}" class="btn btn-sm btn-outline-primary">
+                        Submissions ({{ a.submission_count }})
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="card p-5 text-center text-muted">No assignments found.</div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

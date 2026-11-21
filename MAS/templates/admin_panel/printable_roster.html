@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Printable Roster — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 no-print">
+    <div>
+        <h3 class="fw-bold mb-0">Printable Institutional Roster</h3>
+        <p class="text-muted small mb-0">Filter by Class, Semester, or Role and print clean official user directories.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'download_credentials_excel' %}?scope=all" class="btn btn-outline-success">
+            <i class="bi bi-file-earmark-excel me-1"></i>Export Credentials (.xlsx)
+        </a>
+        <button type="button" onclick="acadexPrint('acadex_roster.html')" class="btn btn-primary">
+            <i class="bi bi-printer me-1"></i>Print Roster
+        </button>
+    </div>
+</div>
+
+<form method="get" class="card p-3 mb-4 no-print">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold">Class / Department</label>
+            <select name="class_id" class="form-select">
+                <option value="">All Classes</option>
+                {% for c in classes %}
+                <option value="{{ c.id }}" {% if selected_class_id == c.id|stringformat:"s" %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold">Semester (Students)</label>
+            <select name="semester" class="form-select">
+                <option value="">All Semesters</option>
+                {% for sem_val, sem_label in semester_choices %}
+                <option value="{{ sem_val }}" {% if selected_semester == sem_val %}selected{% endif %}>{{ sem_label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold">Role</label>
+            <select name="role" class="form-select">
+                <option value="">All Roles</option>
+                <option value="STUDENT" {% if selected_role == 'STUDENT' %}selected{% endif %}>Student</option>
+                <option value="TEACHER" {% if selected_role == 'TEACHER' %}selected{% endif %}>Teacher</option>
+                <option value="ADMIN" {% if selected_role == 'ADMIN' %}selected{% endif %}>Super Admin</option>
+            </select>
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+            <button type="submit" class="btn btn-dark flex-grow-1">Apply Filter</button>
+            <a href="{% url 'printable_roster' %}" class="btn btn-outline-secondary">Reset</a>
+        </div>
+    </div>
+</form>
+
+<div class="card p-4">
+    <div class="d-flex justify-content-between align-items-end border-bottom pb-3 mb-3">
+        <div>
+            <h4 class="fw-bold mb-0">ACADEX LMS — OFFICIAL USER ROSTER</h4>
+            <div class="small text-muted">Generated on {{ generated_at|date:"F d, Y H:i" }}</div>
+        </div>
+        <div class="small fw-semibold">Total Users: {{ users|length }}</div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-bordered table-sm align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th>
+                    <th>Roll Number / ID</th>
+                    <th>Full Name</th>
+                    <th>Role</th>
+                    <th>Class / Department</th>
+                    <th>Semester</th>
+                    <th>Onboarding Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td class="fw-semibold"><code>{{ u.roll_number }}</code></td>
+                    <td>{{ u.full_name }}</td>
+                    <td>{{ u.get_role_display }}</td>
+                    <td>
+                        {% if u.student_class %}
+                            {{ u.student_class.name }}
+                        {% elif u.assigned_classes.exists %}
+                            {% for c in u.assigned_classes.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                        {% else %}
+                            Administration
+                        {% endif %}
+                    </td>
+                    <td>{{ u.semester|default:"&mdash;" }}</td>
+                    <td>
+                        {% if u.must_change_password %}
+                        <span class="text-warning fw-semibold">Default Password Active</span>
+                        {% else %}
+                        <span class="text-success">Private Password Set</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="text-center text-muted py-4">No users matching filter.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

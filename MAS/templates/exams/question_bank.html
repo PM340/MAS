@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}Question Bank — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Question Bank</h3>
+        <p class="text-muted small mb-0">MCQs, Fill in the Blanks, and Short Answers with full MathJax LaTeX equation support.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'question_import_pdf' %}" class="btn btn-outline-primary">
+            <i class="bi bi-file-earmark-pdf me-1"></i>Import Questions from PDF
+        </a>
+        <a href="{% url 'question_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Add Question
+        </a>
+    </div>
+</div>
+
+<form method="get" class="card p-3 mb-4">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label small fw-semibold">Search Prompt</label>
+            <input type="text" name="q" value="{{ search_q }}" class="form-control" placeholder="Keyword or LaTeX...">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold">Subject</label>
+            <select name="subject_id" class="form-select">
+                <option value="">All Subjects</option>
+                {% for s in subjects %}
+                <option value="{{ s.id }}" {% if selected_subject_id == s.id|stringformat:"s" %}selected{% endif %}>
+                    {{ s.academic_class.name }} - {{ s.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold">Question Type</label>
+            <select name="type" class="form-select">
+                <option value="">All Types</option>
+                <option value="MCQ" {% if selected_type == 'MCQ' %}selected{% endif %}>MCQ</option>
+                <option value="FITB" {% if selected_type == 'FITB' %}selected{% endif %}>Fill in the Blanks</option>
+                <option value="SHORT" {% if selected_type == 'SHORT' %}selected{% endif %}>Short Answer</option>
+            </select>
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-dark flex-grow-1">Filter</button>
+        </div>
+    </div>
+</form>
+
+<div class="d-flex flex-column gap-3">
+    {% for q in questions %}
+    <div class="card p-3">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-primary">{{ q.get_question_type_display }}</span>
+                <span class="badge bg-light text-dark border">{{ q.subject.academic_class.name }} &middot; {{ q.subject.code }}</span>
+                <span class="badge bg-secondary">{{ q.marks }} Marks</span>
+                <span class="badge bg-info text-dark">{{ q.get_difficulty_display }}</span>
+            </div>
+            <div class="d-flex gap-1">
+                <a href="{% url 'question_edit' q.id %}" class="btn btn-sm btn-outline-primary"><i class="bi bi-pencil"></i> Edit</a>
+                {% if user.is_super_admin %}
+                <form method="post" action="{% url 'question_delete' q.id %}" class="d-inline"
+                      data-confirm="Delete question #{{ q.id }}?">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        <div class="fw-medium mb-2">{{ q.prompt|linebreaksbr }}</div>
+        {% if q.question_type == 'MCQ' %}
+        <div class="row g-2 small text-muted">
+            <div class="col-md-6"><strong>A.</strong> {{ q.option_a }}</div>
+            <div class="col-md-6"><strong>B.</strong> {{ q.option_b }}</div>
+            {% if q.option_c %}<div class="col-md-6"><strong>C.</strong> {{ q.option_c }}</div>{% endif %}
+            {% if q.option_d %}<div class="col-md-6"><strong>D.</strong> {{ q.option_d }}</div>{% endif %}
+        </div>
+        {% endif %}
+        <div class="mt-2 pt-2 border-top small text-success">
+            <strong>Answer Key:</strong> {{ q.get_correct_display }}
+        </div>
+    </div>
+    {% empty %}
+    <div class="card p-5 text-center text-muted">No questions found in the Question Bank.</div>
+    {% endfor %}
+</div>
+{% endblock %}

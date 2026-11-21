@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Messages & Notice Board — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">In-App Messaging & Notice Board</h3>
+        <p class="text-muted small mb-0">100% free internal communication for direct Roll Number messages and class-wide notices.</p>
+    </div>
+    {% if user.is_super_admin or user.is_teacher %}
+    <a href="{% url 'compose_message' %}" class="btn btn-primary">
+        <i class="bi bi-pencil-square me-1"></i>Compose Message / Notice
+    </a>
+    {% endif %}
+</div>
+
+<div class="btn-group mb-3">
+    <a href="{% url 'inbox' %}" class="btn btn-sm {% if not filter_type %}btn-dark{% else %}btn-outline-dark{% endif %}">All</a>
+    <a href="{% url 'inbox' %}?type=ANNOUNCEMENT" class="btn btn-sm {% if filter_type == 'ANNOUNCEMENT' %}btn-dark{% else %}btn-outline-dark{% endif %}">Class Notices</a>
+    <a href="{% url 'inbox' %}?type=DIRECT" class="btn btn-sm {% if filter_type == 'DIRECT' %}btn-dark{% else %}btn-outline-dark{% endif %}">Direct Messages</a>
+</div>
+
+<div class="card">
+    <div class="list-group list-group-flush">
+        {% for m in messages_list %}
+        <a href="{% url 'message_detail' m.id %}" class="list-group-item list-group-item-action py-3 px-4">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        {% if m.message_type == 'ANNOUNCEMENT' %}
+                        <span class="badge bg-info text-dark">
+                            {% if m.target_class %}{{ m.target_class.name }} Notice{% else %}All Classes Notice{% endif %}
+                        </span>
+                        {% else %}
+                        <span class="badge bg-primary">Direct Message</span>
+                        {% endif %}
+                        <span class="fw-bold">{{ m.subject }}</span>
+                        {% if m.id not in read_ids and m.sender_id != user.id %}
+                        <span class="badge bg-danger">Unread</span>
+                        {% endif %}
+                    </div>
+                    <p class="small text-muted mb-1">{{ m.body|truncatewords:24 }}</p>
+                    <div class="small text-secondary">
+                        From: <strong>{{ m.sender.full_name }}</strong> (<code>{{ m.sender.roll_number }}</code>)
+                        {% if m.recipient %} &rarr; To: <code>{{ m.recipient.roll_number }}</code>{% endif %}
+                    </div>
+                </div>
+                <span class="small text-muted text-nowrap">{{ m.created_at|date:"M d, H:i" }}</span>
+            </div>
+        </a>
+        {% empty %}
+        <div class="p-5 text-center text-muted">No messages or notices yet.</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block title %}Exam Result — {{ exam.title }}{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Exam Result & Answer Review</h3>
+        <p class="text-muted small mb-0">{{ exam.title }} &middot; {{ attempt.student.full_name }} ({{ attempt.student.roll_number }})</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button type="button" onclick="acadexPrint('exam_result_{{ attempt.student.roll_number }}.html')" class="btn btn-outline-secondary no-print"><i class="bi bi-printer me-1"></i>Print Result</button>
+        <a href="{% url 'exam_list' %}" class="btn btn-primary no-print">Back to Exams</a>
+    </div>
+</div>
+
+{% if attempt.termination_reason %}
+<div class="alert alert-danger shadow-sm mb-4">
+    <i class="bi bi-shield-lock-fill me-2"></i>
+    <strong>Security / Auto-Submit Notice:</strong> {{ attempt.termination_reason }}
+</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card p-3 text-center">
+            <div class="small text-muted">Score</div>
+            <div class="fs-3 fw-bold text-primary">{{ attempt.score }} / {{ exam.total_marks }}</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3 text-center">
+            <div class="small text-muted">Percentage</div>
+            <div class="fs-3 fw-bold">{{ attempt.percentage }}%</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3 text-center">
+            <div class="small text-muted">Evaluation Status</div>
+            {% if attempt.is_fully_graded %}
+                {% if attempt.passed %}
+                <div class="fs-5 fw-bold text-success mt-1">PASSED</div>
+                {% else %}
+                <div class="fs-5 fw-bold text-danger mt-1">NEEDS IMPROVEMENT</div>
+                {% endif %}
+            {% else %}
+                <div class="fs-6 fw-bold text-warning mt-2">Pending Short-Answer Grading</div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card p-3 text-center">
+            <div class="small text-muted">Anti-Cheat Tab Switches</div>
+            <div class="fs-3 fw-bold {% if attempt.tab_switch_count > 0 %}text-danger{% else %}text-success{% endif %}">
+                {{ attempt.tab_switch_count }} / {{ exam.max_tab_switches }}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="d-flex flex-column gap-3">
+    {% for item in review_items %}
+    {% with q=item.question ans=item.answer %}
+    <div class="card p-4">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+                <span class="badge bg-secondary me-1">Q{{ item.number }}</span>
+                <span class="badge bg-light text-dark border">{{ q.get_question_type_display }}</span>
+            </div>
+            <div>
+                {% if ans and ans.marks_awarded is not None %}
+                <span class="badge {% if ans.is_correct %}bg-success{% else %}bg-danger{% endif %}">
+                    {{ ans.marks_awarded }} / {{ q.marks }} Marks
+                </span>
+                {% else %}
+                <span class="badge bg-warning text-dark">Pending Manual Grade ({{ q.marks }} Marks)</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="fw-semibold mb-3">{{ q.prompt|linebreaksbr }}</div>
+
+        <div class="row g-3 small">
+            <div class="col-md-6">
+                <div class="p-3 rounded bg-light border h-100">
+                    <div class="fw-bold text-secondary mb-1">Student Response</div>
+                    {% if q.question_type == 'MCQ' %}
+                        {% if ans and ans.selected_option %}
+                        Selected Option <strong>{{ ans.selected_option }}</strong>
+                        {% else %}
+                        <span class="text-muted">No option selected</span>
+                        {% endif %}
+                    {% else %}
+                        {{ ans.text_answer|default:"No answer submitted"|linebreaksbr }}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded bg-success bg-opacity-10 border border-success border-opacity-25 h-100">
+                    <div class="fw-bold text-success mb-1">Reference / Answer Key</div>
+                    {{ q.get_correct_display }}
+                    {% if ans and ans.grader_feedback %}
+                    <div class="mt-2 pt-2 border-top text-dark">
+                        <strong>Teacher Feedback:</strong> {{ ans.grader_feedback }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endwith %}
+    {% endfor %}
+</div>
+{% endblock %}

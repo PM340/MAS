@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}{{ msg.subject }} — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'inbox' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back to Messages & Notices
+    </a>
+</div>
+
+<div class="card p-4" style="max-width: 820px;">
+    <div class="d-flex justify-content-between align-items-start border-bottom pb-3 mb-3">
+        <div>
+            {% if msg.message_type == 'ANNOUNCEMENT' %}
+            <span class="badge bg-info text-dark mb-2">
+                {% if msg.target_class %}{{ msg.target_class.name }} Announcement{% else %}Global Announcement{% endif %}
+            </span>
+            {% else %}
+            <span class="badge bg-primary mb-2">Direct Message</span>
+            {% endif %}
+            <h4 class="fw-bold mb-1">{{ msg.subject }}</h4>
+            <div class="small text-muted">
+                From: <strong>{{ msg.sender.full_name }}</strong> (<code>{{ msg.sender.roll_number }}</code>, {{ msg.sender.get_role_display }})
+                {% if msg.recipient %}
+                &middot; To: <strong>{{ msg.recipient.full_name }}</strong> (<code>{{ msg.recipient.roll_number }}</code>)
+                {% endif %}
+            </div>
+        </div>
+        <span class="small text-muted">{{ msg.created_at|date:"M d, Y H:i" }}</span>
+    </div>
+    <div class="fs-6 lh-lg">{{ msg.body|linebreaksbr }}</div>
+</div>
+{% endblock %}

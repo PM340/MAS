@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+{% block title %}Attendance Reports — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Class-Wise Attendance Reports</h3>
+        <p class="text-muted small mb-0">Filter by class, subject, and date range with Excel export and A4 Register print view.</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'export_attendance_excel' %}?class_id={{ selected_class.id|default:'' }}&subject_id={{ selected_subject_id }}&start_date={{ start_date }}&end_date={{ end_date }}"
+           class="btn btn-success">
+            <i class="bi bi-file-earmark-excel me-1"></i>Export Excel (.xlsx)
+        </a>
+        <a href="{% url 'printable_attendance_register' %}?class_id={{ selected_class.id|default:'' }}&subject_id={{ selected_subject_id }}&start_date={{ start_date }}&end_date={{ end_date }}"
+           class="btn btn-primary">
+            <i class="bi bi-printer me-1"></i>Printable A4 Register
+        </a>
+    </div>
+</div>
+
+<form method="get" class="card p-3 mb-4">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold">Class / Department</label>
+            <select name="class_id" class="form-select" onchange="this.form.submit()">
+                {% for c in classes %}
+                <option value="{{ c.id }}" {% if selected_class and selected_class.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold">Subject</label>
+            <select name="subject_id" class="form-select">
+                <option value="">All Subjects</option>
+                {% for s in subjects %}
+                <option value="{{ s.id }}" {% if selected_subject_id == s.id|stringformat:"s" %}selected{% endif %}>{{ s.code }} - {{ s.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">From Date</label>
+            <input type="date" name="start_date" value="{{ start_date }}" class="form-control">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">To Date</label>
+            <input type="date" name="end_date" value="{{ end_date }}" class="form-control">
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+            <button type="submit" class="btn btn-dark flex-grow-1">Apply</button>
+        </div>
+    </div>
+</form>
+
+<div class="card">
+    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0">{{ selected_class.name|default:'Class' }} Attendance Summary ({{ sessions|length }} Sessions)</h6>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Roll No</th>
+                    <th>Student Name</th>
+                    {% for sess in sessions %}
+                    <th class="text-center small" style="min-width: 72px;">
+                        {{ sess.date|date:"d/m" }}<br>
+                        <span class="text-muted">{{ sess.subject.code }}</span>
+                    </th>
+                    {% endfor %}
+                    <th class="text-center">Present</th>
+                    <th class="text-center">Total</th>
+                    <th class="text-center">Attendance %</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in student_summaries %}
+                <tr>
+                    <td><code>{{ row.student.roll_number }}</code></td>
+                    <td class="fw-semibold">{{ row.student.full_name }}</td>
+                    {% for cell in row.cells %}
+                    <td class="text-center fw-bold {% if cell == 'P' %}text-success{% elif cell == 'A' %}text-danger{% else %}text-muted{% endif %}">
+                        {{ cell }}
+                    </td>
+                    {% endfor %}
+                    <td class="text-center fw-semibold">{{ row.present }}</td>
+                    <td class="text-center">{{ row.total }}</td>
+                    <td class="text-center">
+                        <span class="badge {% if row.percentage >= 75 %}bg-success{% else %}bg-danger{% endif %}">
+                            {{ row.percentage }}%
+                        </span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="10" class="text-center text-muted py-4">No students or attendance records for the selected filter.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

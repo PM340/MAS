@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+{% load lms_extras %}
+{% block title %}Student Dashboard — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Welcome, {{ user.full_name }}</h3>
+        <p class="text-muted small mb-0">
+            Roll Number: <strong>{{ user.roll_number }}</strong> &middot;
+            Class: <strong>{{ student_class.name|default:'Unassigned' }}</strong>
+            {% if user.semester %}&middot; <span class="badge bg-primary">{{ user.semester }}</span>{% endif %}
+        </p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'inbox' %}" class="btn btn-outline-primary position-relative">
+            <i class="bi bi-envelope-open me-1"></i>Messages & Notices
+            {% if unread_count > 0 %}
+            <span class="badge bg-danger ms-1">{{ unread_count }} Unread</span>
+            {% endif %}
+        </a>
+        <a href="{% url 'student_attendance' %}" class="btn btn-outline-success">
+            <i class="bi bi-calendar2-check me-1"></i>Attendance: {{ overall_attendance_pct }}%
+        </a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card p-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="stat-card-icon bg-success bg-opacity-10 text-success"><i class="bi bi-person-check"></i></div>
+                <div>
+                    <div class="text-muted small">Overall Attendance</div>
+                    <div class="fs-4 fw-bold">{{ overall_attendance_pct }}%</div>
+                    <div class="small text-muted">{{ present_att }} / {{ total_att }} classes attended</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="stat-card-icon bg-primary bg-opacity-10 text-primary"><i class="bi bi-journal-check"></i></div>
+                <div>
+                    <div class="text-muted small">Published Exams</div>
+                    <div class="fs-4 fw-bold">{{ exams|length }}</div>
+                    <div class="small text-muted">For {{ student_class.name|default:'your class' }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card p-3">
+            <div class="d-flex align-items-center gap-3">
+                <div class="stat-card-icon bg-danger bg-opacity-10 text-danger"><i class="bi bi-bell"></i></div>
+                <div>
+                    <div class="text-muted small">Unread Notices & DMs</div>
+                    <div class="fs-4 fw-bold">{{ unread_count }}</div>
+                    <div class="small text-muted"><a href="{% url 'inbox' %}">Open notice board</a></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-7">
+        <div class="card mb-4">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0"><i class="bi bi-laptop me-2 text-primary"></i>Online Timed Exams</h6>
+                <a href="{% url 'exam_list' %}" class="btn btn-sm btn-outline-primary">All Exams</a>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for exam in exams %}
+                {% with attempt=attempts_map|get_item:exam.id %}
+                <div class="list-group-item py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-semibold">{{ exam.title }}</div>
+                        <div class="small text-muted">{{ exam.subject.name }} &middot; {{ exam.duration_minutes }} mins &middot; {{ exam.total_marks }} marks</div>
+                    </div>
+                    {% if attempt and attempt.status != 'IN_PROGRESS' %}
+                    <a href="{% url 'exam_result' attempt.id %}" class="btn btn-sm btn-outline-success">
+                        Score: {{ attempt.score }}/{{ exam.total_marks }}
+                    </a>
+                    {% else %}
+                    <a href="{% url 'take_exam' exam.id %}" class="btn btn-sm btn-primary">
+                        {% if attempt %}Resume Exam{% else %}Start Exam{% endif %}
+                    </a>
+                    {% endif %}
+                </div>
+                {% endwith %}
+                {% empty %}
+                <div class="p-4 text-center text-muted small">No active exams for your class right now.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0"><i class="bi bi-file-earmark-arrow-up me-2 text-info"></i>Assignments</h6>
+                <a href="{% url 'assignment_list' %}" class="btn btn-sm btn-outline-info">View All</a>
+            </div>
+            <div class="list-group list-group-flush">
+                {% for assn in assignments %}
+                {% with sub=submissions_map|get_item:assn.id %}
+                <a href="{% url 'assignment_detail' assn.id %}" class="list-group-item list-group-item-action py-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-semibold">{{ assn.title }}</div>
+                        <div class="small text-muted">{{ assn.subject.code }} &middot; Due {{ assn.due_date|date:"M d, Y H:i" }}</div>
+                    </div>
+                    {% if sub %}
+                        {% if sub.is_graded %}
+                        <span class="badge bg-success">Graded: {{ sub.marks_obtained }}/{{ assn.max_marks }}</span>
+                        {% else %}
+                        <span class="badge bg-info text-dark">Submitted</span>
+                        {% endif %}
+                    {% else %}
+                        <span class="badge bg-warning text-dark">Pending</span>
+                    {% endif %}
+                </a>
+                {% endwith %}
+                {% empty %}
+                <div class="p-4 text-center text-muted small">No assignments assigned yet.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0"><i class="bi bi-megaphone me-2 text-danger"></i>Notice Board & Inbox</h6>
+                {% if unread_count > 0 %}
+                <span class="badge bg-danger rounded-pill">{{ unread_count }} unread</span>
+                {% endif %}
+            </div>
+            <div class="list-group list-group-flush">
+                {% for m in recent_notices %}
+                <a href="{% url 'message_detail' m.id %}" class="list-group-item list-group-item-action py-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <span class="fw-semibold small">{{ m.subject }}</span>
+                        {% if m.id not in read_ids and m.sender_id != user.id %}
+                        <span class="badge bg-danger">Unread</span>
+                        {% endif %}
+                    </div>
+                    <div class="text-muted mt-1" style="font-size: 0.78rem;">
+                        From {{ m.sender.full_name }} &middot; {{ m.created_at|date:"M d, H:i" }}
+                    </div>
+                </a>
+                {% empty %}
+                <div class="p-4 text-center text-muted small">No notices or messages yet.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

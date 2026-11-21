@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% block title %}Take Attendance — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Take Class Attendance</h3>
+        <p class="text-muted small mb-0">Select Class, optional Semester, Subject, Date, and Time Slot. All students are marked Present by default.</p>
+    </div>
+    <a href="{% url 'admin_attendance_report' %}" class="btn btn-outline-primary">
+        <i class="bi bi-clipboard-data me-1"></i>Attendance Reports
+    </a>
+</div>
+
+<form method="get" class="card p-3 mb-4">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">Class / Dept</label>
+            <select name="academic_class" class="form-select" onchange="this.form.submit()">
+                {% for c in classes %}
+                <option value="{{ c.id }}" {% if selected_class and selected_class.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">Semester</label>
+            <select name="semester" class="form-select">
+                <option value="">All Semesters</option>
+                {% for sem_val, sem_label in semester_choices %}
+                <option value="{{ sem_val }}" {% if selected_semester == sem_val %}selected{% endif %}>{{ sem_label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label small fw-semibold">Subject</label>
+            <select name="subject" class="form-select">
+                {% for s in subjects %}
+                <option value="{{ s.id }}" {% if selected_subject and selected_subject.id == s.id %}selected{% endif %}>{{ s.code }} - {{ s.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">Date</label>
+            <input type="date" name="date" value="{{ selected_date }}" class="form-control">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label small fw-semibold">Time Slot</label>
+            <select name="time_slot" class="form-select">
+                {% for slot in time_slots %}
+                <option value="{{ slot }}" {% if selected_time_slot == slot %}selected{% endif %}>{{ slot }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-1">
+            <button type="submit" class="btn btn-dark w-100">Load</button>
+        </div>
+    </div>
+</form>
+
+{% if selected_class and selected_subject %}
+<form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="save_attendance" value="1">
+    <input type="hidden" name="academic_class" value="{{ selected_class.id }}">
+    <input type="hidden" name="subject" value="{{ selected_subject.id }}">
+    <input type="hidden" name="semester" value="{{ selected_semester }}">
+    <input type="hidden" name="date" value="{{ selected_date }}">
+    <input type="hidden" name="time_slot" value="{{ selected_time_slot }}">
+
+    <div class="card">
+        <div class="card-header bg-white py-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+                <span class="fw-bold">{{ selected_class.name }}{% if selected_semester %} ({{ selected_semester }}){% endif %} &middot; {{ selected_subject.name }}</span>
+                <span class="text-muted small ms-2">{{ selected_date }} ({{ selected_time_slot }})</span>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-success" onclick="markAll('PRESENT')">Mark All Present</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="markAll('ABSENT')">Mark All Absent</button>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Roll Number</th>
+                        <th>Student Name</th>
+                        <th>Status</th>
+                        <th>Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in student_rows %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td><code>{{ row.student.roll_number }}</code></td>
+                        <td class="fw-semibold">
+                            {{ row.student.full_name }}
+                            {% if row.student.semester %}
+                            <span class="badge bg-light text-primary border ms-1">{{ row.student.semester }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <input type="radio" class="btn-check att-radio-present" name="status_{{ row.student.id }}"
+                                       id="p_{{ row.student.id }}" value="PRESENT" {% if row.status == 'PRESENT' %}checked{% endif %}>
+                                <label class="btn btn-outline-success" for="p_{{ row.student.id }}">Present</label>
+
+                                <input type="radio" class="btn-check att-radio-absent" name="status_{{ row.student.id }}"
+                                       id="a_{{ row.student.id }}" value="ABSENT" {% if row.status == 'ABSENT' %}checked{% endif %}>
+                                <label class="btn btn-outline-danger" for="a_{{ row.student.id }}">Absent</label>
+                            </div>
+                        </td>
+                        <td>
+                            <input type="text" name="remarks_{{ row.student.id }}" value="{{ row.remarks }}"
+                                   class="form-control form-control-sm" placeholder="Optional note">
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center text-muted py-4">No students enrolled matching {{ selected_class.name }}{% if selected_semester %} ({{ selected_semester }}){% endif %}.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if student_rows %}
+        <div class="card-footer bg-white py-3 text-end">
+            <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-check2-circle me-1"></i>Save Attendance Register
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</form>
+{% else %}
+<div class="card p-5 text-center text-muted">
+    Please add at least one Class and Subject first before taking attendance.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function markAll(status) {
+        const selector = status === 'PRESENT' ? '.att-radio-present' : '.att-radio-absent';
+        document.querySelectorAll(selector).forEach(el => { el.checked = true; });
+    }
+</script>
+{% endblock %}

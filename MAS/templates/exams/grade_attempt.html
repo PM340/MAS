@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Grade Exam Attempt — {{ attempt.student.roll_number }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Grade Exam Attempt</h3>
+        <p class="text-muted small mb-0">{{ attempt.exam.title }} &middot; Student: {{ attempt.student.full_name }} ({{ attempt.student.roll_number }})</p>
+    </div>
+    <a href="{% url 'exam_attempts' attempt.exam_id %}" class="btn btn-outline-secondary">Back to Attempts</a>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    <div class="d-flex flex-column gap-3 mb-4">
+        {% for ans in answers %}
+        <div class="card p-4">
+            <div class="d-flex justify-content-between mb-2">
+                <span class="badge bg-primary">{{ ans.question.get_question_type_display }}</span>
+                <span class="badge bg-secondary">Max {{ ans.question.marks }} Marks</span>
+            </div>
+            <div class="fw-semibold mb-3">{{ ans.question.prompt|linebreaksbr }}</div>
+
+            {% if ans.question.question_type == 'SHORT' %}
+            <div class="p-3 bg-light rounded border mb-3">
+                <div class="small fw-bold text-secondary mb-1">Student Response:</div>
+                <div>{{ ans.text_answer|default:"(No answer submitted)"|linebreaksbr }}</div>
+            </div>
+            <div class="p-3 bg-success bg-opacity-10 rounded border border-success border-opacity-25 mb-3 small">
+                <strong>Model Answer:</strong> {{ ans.question.model_answer|default:"N/A" }}
+            </div>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold">Marks Awarded (0 - {{ ans.question.marks }})</label>
+                    <input type="number" step="0.5" min="0" max="{{ ans.question.marks }}"
+                           name="marks_{{ ans.id }}" value="{{ ans.marks_awarded|default_if_none:'' }}"
+                           class="form-control">
+                </div>
+                <div class="col-md-9">
+                    <label class="form-label small fw-semibold">Feedback</label>
+                    <input type="text" name="feedback_{{ ans.id }}" value="{{ ans.grader_feedback }}" class="form-control" placeholder="Optional grader feedback">
+                </div>
+            </div>
+            {% else %}
+            <div class="small text-muted">
+                Auto-graded ({{ ans.question.get_question_type_display }}):
+                <strong>{{ ans.marks_awarded|default:0 }} / {{ ans.question.marks }}</strong>
+                &middot; Student:
+                {% if ans.question.question_type == 'MCQ' %}{{ ans.selected_option|default:"None" }}{% else %}{{ ans.text_answer|default:"None" }}{% endif %}
+                &middot; Key: {{ ans.question.get_correct_display }}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    <button type="submit" class="btn btn-primary btn-lg">
+        <i class="bi bi-check-circle me-1"></i>Save Manual Grades & Recalculate Score
+    </button>
+</form>
+{% endblock %}

@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}Bulk Excel Onboarding — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Bulk Excel Onboarding</h3>
+        <p class="text-muted small mb-0">Upload a 4 or 5-column <code>.xlsx</code> sheet to onboard Sem-wise Students (<code>Sem 1</code>&ndash;<code>Sem 8</code>) and multi-class Teachers (<code>BBA, BCom</code>).</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'download_sample_excel' %}" class="btn btn-outline-primary">
+            <i class="bi bi-file-earmark-arrow-down me-1"></i>Download Sample Template (.xlsx)
+        </a>
+        <a href="{% url 'printable_roster' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-printer me-1"></i>Printable Roster
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card p-4">
+            <h5 class="fw-bold mb-3"><i class="bi bi-upload me-2 text-primary"></i>Upload User Roster (.xlsx)</h5>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">{{ form.excel_file.label }}</label>
+                    {{ form.excel_file }}
+                    {% if form.excel_file.errors %}
+                    <div class="text-danger small mt-1">{{ form.excel_file.errors|striptags }}</div>
+                    {% endif %}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">{{ form.default_role.label }}</label>
+                    {{ form.default_role }}
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">{{ form.default_semester.label }}</label>
+                    {{ form.default_semester }}
+                    <div class="form-text">Applies to Student rows when no Semester is specified in the sheet.</div>
+                </div>
+                <div class="alert alert-light border small mb-3">
+                    <div class="fw-bold mb-1">Supported Columns (4 or 5 Columns):</div>
+                    <ol class="mb-1 ps-3">
+                        <li><code>Roll Number</code> (or System ID)</li>
+                        <li><code>Name</code></li>
+                        <li><code>Class/Department</code> (e.g. <code>BBA</code>, or multiple for Teachers like <code>BBA, BCom</code> / <code>BBA &amp; BCom</code>)</li>
+                        <li><code>Role</code> (Student, Teacher, or Admin &mdash; optional if Role Override chosen)</li>
+                        <li><code>Semester</code> (optional for Students: <code>Sem 1</code>, <code>Sem 2</code>, <code>Sem 3</code>, <code>Sem 4</code>, etc.)</li>
+                    </ol>
+                    <div class="text-muted">Default Password Formula: <code>&lt;RollNumber&gt;@2026</code> (forced reset on first login).</div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 fw-semibold">
+                    <i class="bi bi-lightning-charge me-1"></i>Process Excel &amp; Onboard Users
+                </button>
+            </form>
+
+            <hr class="my-4">
+            <div class="d-grid gap-2">
+                {% if has_batch_credentials %}
+                <a href="{% url 'download_credentials_excel' %}?scope=batch" class="btn btn-success">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Download Latest Batch Credentials (.xlsx)
+                </a>
+                {% endif %}
+                <a href="{% url 'download_credentials_excel' %}?scope=all" class="btn btn-outline-success">
+                    <i class="bi bi-download me-1"></i>Download Full User Credentials (.xlsx)
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        {% if upload_summary %}
+        <div class="card">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0 text-success"><i class="bi bi-check-circle-fill me-2"></i>Onboarding Results</h6>
+                <span class="badge bg-primary">{{ upload_summary.created_count }} Created &middot; {{ upload_summary.updated_count }} Updated</span>
+            </div>
+            <div class="card-body">
+                {% if upload_summary.created_classes %}
+                <div class="alert alert-info py-2 small">
+                    <strong>Auto-created Classes:</strong> {{ upload_summary.created_classes|join:", " }}
+                </div>
+                {% endif %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Roll No</th>
+                                <th>Name</th>
+                                <th>Class(es)</th>
+                                <th>Semester</th>
+                                <th>Role</th>
+                                <th>Default Password</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r in upload_summary.rows %}
+                            <tr>
+                                <td><code>{{ r.roll_number }}</code></td>
+                                <td>{{ r.full_name }}</td>
+                                <td>{{ r.class_name }}</td>
+                                <td>{{ r.semester }}</td>
+                                <td>{{ r.role }}</td>
+                                <td><code>{{ r.default_password }}</code></td>
+                                <td><span class="badge bg-light text-dark border">{{ r.status }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="card p-5 text-center text-muted">
+            <i class="bi bi-table display-4 mb-3 text-secondary"></i>
+            <h5>Ready for Bulk Onboarding</h5>
+            <p class="small mb-0">
+                Download the sample <code>.xlsx</code> file on the top right to see examples of semester-wise Students (<code>Sem 1</code>&ndash;<code>Sem 4</code>) and multi-class Teachers (<code>BBA, BCom</code> &amp; <code>BBA &amp; BCom</code>).
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

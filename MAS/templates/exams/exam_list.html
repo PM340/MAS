@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% load lms_extras %}
+{% block title %}Exams & Papers — Acadex LMS{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <div>
+        <h3 class="fw-bold mb-0">Exams & Printable Question Papers</h3>
+        <p class="text-muted small mb-0">
+            {% if user.is_student %}Take timed Moodle exams and review your auto-graded results.
+            {% else %}Assemble exams from the Question Bank, print formatted papers with Answer Keys, and grade attempts.{% endif %}
+        </p>
+    </div>
+    {% if not user.is_student %}
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'question_bank' %}" class="btn btn-outline-secondary">Question Bank</a>
+        <a href="{% url 'format_paper_generator' %}" class="btn btn-outline-primary"><i class="bi bi-file-earmark-word me-1"></i>Format Paper (Word &amp; PDF)</a>
+        <a href="{% url 'exam_create' %}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Create Exam</a>
+    </div>
+    {% endif %}
+</div>
+
+<div class="row g-3">
+    {% for exam in exams %}
+    <div class="col-md-6">
+        <div class="card h-100 p-4">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <span class="badge bg-primary">{{ exam.academic_class.name }}</span>
+                    <span class="badge bg-light text-dark border">{{ exam.subject.code }}</span>
+                    {% if not exam.is_published %}
+                    <span class="badge bg-secondary">Draft</span>
+                    {% endif %}
+                </div>
+                <span class="small text-muted"><i class="bi bi-clock me-1"></i>{{ exam.duration_minutes }} mins</span>
+            </div>
+            <h5 class="fw-bold mb-1">{{ exam.title }}</h5>
+            <p class="small text-muted mb-3">
+                {{ exam.question_count }} Questions &middot; Total {{ exam.total_marks }} Marks &middot;
+                Pass {{ exam.passing_percentage }}% &middot; Max Tab Switches: {{ exam.max_tab_switches }}
+            </p>
+
+            <div class="mt-auto d-flex flex-wrap gap-2">
+                {% if user.is_student %}
+                    {% with attempt=attempts_map|get_item:exam.id %}
+                    {% if attempt and attempt.status != 'IN_PROGRESS' %}
+                        <a href="{% url 'exam_result' attempt.id %}" class="btn btn-success btn-sm">
+                            <i class="bi bi-bar-chart me-1"></i>View Result ({{ attempt.score }}/{{ exam.total_marks }})
+                        </a>
+                    {% else %}
+                        <a href="{% url 'take_exam' exam.id %}" class="btn btn-primary btn-sm">
+                            <i class="bi bi-play-fill me-1"></i>{% if attempt %}Resume Exam{% else %}Start Timed Exam{% endif %}
+                        </a>
+                    {% endif %}
+                    {% endwith %}
+                {% else %}
+                    <a href="{% url 'printable_paper' exam.id %}" class="btn btn-outline-dark btn-sm">
+                        <i class="bi bi-printer me-1"></i>Printable Paper
+                    </a>
+                    <a href="{% url 'format_paper_generator_for_exam' exam.id %}" class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-file-earmark-richtext me-1"></i>Word &amp; PDF Format
+                    </a>
+                    <a href="{% url 'exam_attempts' exam.id %}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-people me-1"></i>Attempts ({{ exam.attempt_count }})
+                    </a>
+                    <a href="{% url 'exam_edit' exam.id %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-pencil me-1"></i>Edit
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="col-12">
+        <div class="card p-5 text-center text-muted">No exams available yet.</div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

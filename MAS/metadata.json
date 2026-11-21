@@ -1,0 +1,6 @@
+{
+  "name": "Acadex LMS (Django)",
+  "description": "Moodle-style Learning Management System built in Python, Django, SQLite, and Bootstrap 5.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

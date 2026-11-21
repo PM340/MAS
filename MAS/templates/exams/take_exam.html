@@ -1,0 +1,696 @@
+{% extends 'base.html' %}
+{% block title %}Secure Exam: {{ exam.title }} — Acadex LMS{% endblock %}
+
+{% block extra_css %}
+<style>
+    body {
+        background-color: #f1f5f9;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    input, textarea {
+        user-select: text;
+        -webkit-user-select: text;
+    }
+    .palette-btn {
+        width: 42px;
+        height: 42px;
+        font-weight: 700;
+        border-radius: 0.5rem;
+        border: 2px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        transition: transform 0.12s ease;
+    }
+    .palette-btn:hover { transform: scale(1.06); }
+    .palette-not-visited { background-color: #e2e8f0; color: #334155; }
+    .palette-unanswered { background-color: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+    .palette-answered { background-color: #16a34a; color: #ffffff; }
+    .palette-review { background-color: #7c3aed; color: #ffffff; }
+    .palette-answered-review { background-color: #7c3aed; color: #ffffff; box-shadow: inset 0 -4px 0 #22c55e; }
+    .palette-active { outline: 3px solid #0f294a; outline-offset: 2px; }
+    .timer-pill {
+        font-family: monospace;
+        font-size: 1.25rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Sticky Full-Page Exam Header -->
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3 p-3 bg-white border rounded-3 shadow-sm">
+    <div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-dark"><i class="bi bi-shield-lock me-1"></i>Secure Exam</span>
+            <h5 class="fw-bold mb-0">{{ exam.title }}</h5>
+        </div>
+        <div class="small text-muted mt-1">
+            {{ user.full_name }} (<code>{{ user.roll_number }}</code>) &middot;
+            {{ exam.academic_class.name }} &middot; {{ exam.subject.name }} &middot;
+            Total {{ exam.total_marks }} Marks
+        </div>
+    </div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+        <button type="button" id="fullscreenBtn" class="btn btn-sm btn-outline-primary" onclick="requestExamFullscreen()">
+            <i class="bi bi-arrows-fullscreen me-1"></i><span id="fsBtnLabel">Full Screen</span>
+        </button>
+        <div id="tabWarningBadge" class="badge bg-warning text-dark px-3 py-2">
+            <i class="bi bi-shield-exclamation me-1"></i>
+            Violations: <span id="tabSwitchCount">{{ attempt.tab_switch_count }}</span> / {{ exam.max_tab_switches }}
+        </div>
+        <div id="timerBox" class="bg-dark text-white px-3 py-2 rounded-3 timer-pill">
+            <i class="bi bi-stopwatch me-1 text-warning"></i><span id="timerDisplay">--:--</span>
+        </div>
+    </div>
+</div>
+
+<div id="fullscreenExitAlert" class="alert alert-warning d-none justify-content-between align-items-center shadow-sm" role="alert">
+    <div>
+        <i class="bi bi-fullscreen-exit me-2"></i>
+        <strong>Full-Screen Exited:</strong> Please stay in full-screen mode until you submit your exam.
+    </div>
+    <button type="button" class="btn btn-sm btn-dark" onclick="requestExamFullscreen()">Return to Full-Screen</button>
+</div>
+
+<div id="antiCheatAlert" class="alert alert-danger d-none shadow-sm" role="alert">
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    <strong>Anti-Cheating Warning:</strong> Tab switching or leaving full-screen focus is recorded!
+    Violation <span id="alertViolationCount"></span> of {{ exam.max_tab_switches }}.
+    Reaching {{ exam.max_tab_switches }} violations will auto-submit your exam.
+</div>
+
+<div id="timeExpiredBanner" class="alert alert-danger d-none shadow-sm fw-semibold" role="alert">
+    <i class="bi bi-alarm-fill me-2"></i>Time's up! Auto-submitting your exam now...
+</div>
+
+<div id="multiDeviceClosedBanner" class="alert alert-danger d-none shadow-sm fw-semibold" role="alert">
+    <i class="bi bi-phone-vibrate-fill me-2"></i><span id="multiDeviceReason">Exam auto-submitted and closed because another phone/device accessed this exam.</span>
+</div>
+
+<form id="examForm" method="post" action="{% url 'submit_exam' attempt.id %}">
+    {% csrf_token %}
+    <input type="hidden" name="auto_submitted" id="autoSubmittedInput" value="0">
+
+    <div class="row g-4">
+        <!-- Main Question Area -->
+        <div class="col-lg-8">
+            <div class="card p-4">
+                {% for item in question_items %}
+                {% with q=item.question ans=item.answer %}
+                <div class="question-slide {% if not forloop.first %}d-none{% endif %}"
+                     id="qSlide-{{ forloop.counter0 }}"
+                     data-index="{{ forloop.counter0 }}"
+                     data-qid="{{ q.id }}"
+                     data-qtype="{{ q.question_type }}"
+                     data-visited="{% if ans.is_visited or forloop.first %}1{% else %}0{% endif %}"
+                     data-review="{% if ans.is_marked_for_review %}1{% else %}0{% endif %}">
+
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                        <span class="fw-bold text-primary">Question {{ item.number }} of {{ question_items|length }}</span>
+                        <div class="d-flex gap-2">
+                            <span class="badge bg-light text-dark border">{{ q.get_question_type_display }}</span>
+                            <span class="badge bg-secondary">{{ q.marks }} Marks</span>
+                        </div>
+                    </div>
+
+                    <div class="fs-5 mb-4 lh-base">{{ q.prompt|linebreaksbr }}</div>
+
+                    {% if q.question_type == 'MCQ' %}
+                    <div class="d-flex flex-column gap-2">
+                        {% if q.option_a %}
+                        <label class="border rounded-3 p-3 d-flex align-items-center gap-3 cursor-pointer bg-light bg-opacity-50">
+                            <input type="radio" class="form-check-input mt-0 q-input" name="q_opt_{{ q.id }}" value="A"
+                                   {% if ans.selected_option == 'A' %}checked{% endif %}>
+                            <span><strong>A.</strong> {{ q.option_a }}</span>
+                        </label>
+                        {% endif %}
+                        {% if q.option_b %}
+                        <label class="border rounded-3 p-3 d-flex align-items-center gap-3 cursor-pointer bg-light bg-opacity-50">
+                            <input type="radio" class="form-check-input mt-0 q-input" name="q_opt_{{ q.id }}" value="B"
+                                   {% if ans.selected_option == 'B' %}checked{% endif %}>
+                            <span><strong>B.</strong> {{ q.option_b }}</span>
+                        </label>
+                        {% endif %}
+                        {% if q.option_c %}
+                        <label class="border rounded-3 p-3 d-flex align-items-center gap-3 cursor-pointer bg-light bg-opacity-50">
+                            <input type="radio" class="form-check-input mt-0 q-input" name="q_opt_{{ q.id }}" value="C"
+                                   {% if ans.selected_option == 'C' %}checked{% endif %}>
+                            <span><strong>C.</strong> {{ q.option_c }}</span>
+                        </label>
+                        {% endif %}
+                        {% if q.option_d %}
+                        <label class="border rounded-3 p-3 d-flex align-items-center gap-3 cursor-pointer bg-light bg-opacity-50">
+                            <input type="radio" class="form-check-input mt-0 q-input" name="q_opt_{{ q.id }}" value="D"
+                                   {% if ans.selected_option == 'D' %}checked{% endif %}>
+                            <span><strong>D.</strong> {{ q.option_d }}</span>
+                        </label>
+                        {% endif %}
+                    </div>
+                    {% elif q.question_type == 'FITB' %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Your Answer (Exact Word / Value):</label>
+                        <input type="text" class="form-control form-control-lg q-input" name="q_txt_{{ q.id }}"
+                               value="{{ ans.text_answer }}" placeholder="Type your answer here...">
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Short Answer Response:</label>
+                        <textarea class="form-control q-input" rows="5" name="q_txt_{{ q.id }}"
+                                  placeholder="Write a clear and concise answer...">{{ ans.text_answer }}</textarea>
+                    </div>
+                    {% endif %}
+                </div>
+                {% endwith %}
+                {% endfor %}
+
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 border-top pt-3 mt-4">
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary" id="prevBtn" onclick="changeSlide(-1)">
+                            <i class="bi bi-arrow-left me-1"></i>Previous
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" id="reviewBtn" onclick="toggleReview()">
+                            <i class="bi bi-bookmark-star me-1"></i><span id="reviewBtnLabel">Mark for Review</span>
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" onclick="clearCurrentAnswer()">
+                            Clear
+                        </button>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-primary" id="nextBtn" onclick="changeSlide(1)">
+                            Save &amp; Next <i class="bi bi-arrow-right ms-1"></i>
+                        </button>
+                        <button type="button" id="finishExamBtn" class="btn btn-success fw-semibold" onclick="openSubmitModal()">
+                            <i class="bi bi-send-check me-1"></i>Finish &amp; Submit Exam
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Countdown Timer & Moodle Color-Coded Navigation Palette -->
+        <div class="col-lg-4">
+            <div class="sticky-top" style="top: 20px;">
+                {% include 'exams/_countdown_timer.html' %}
+                <div class="card p-4">
+                    <h6 class="fw-bold mb-3"><i class="bi bi-grid-3x3-gap me-2 text-primary"></i>Question Navigation Palette</h6>
+                <div class="d-flex flex-wrap gap-2 mb-4" id="paletteGrid">
+                    {% for item in question_items %}
+                    <button type="button"
+                            class="palette-btn palette-not-visited"
+                            id="paletteBtn-{{ forloop.counter0 }}"
+                            onclick="goToSlide({{ forloop.counter0 }})">
+                        {{ item.number }}
+                    </button>
+                    {% endfor %}
+                </div>
+
+                <div class="border-top pt-3 small mb-3">
+                    <div class="fw-bold mb-2 text-secondary">Palette Legend</div>
+                    <div class="row g-2">
+                        <div class="col-6 d-flex align-items-center gap-2">
+                            <span class="d-inline-block rounded palette-answered" style="width:16px;height:16px;"></span> Answered
+                        </div>
+                        <div class="col-6 d-flex align-items-center gap-2">
+                            <span class="d-inline-block rounded palette-unanswered" style="width:16px;height:16px;"></span> Unanswered
+                        </div>
+                        <div class="col-6 d-flex align-items-center gap-2">
+                            <span class="d-inline-block rounded palette-review" style="width:16px;height:16px;"></span> Marked Review
+                        </div>
+                        <div class="col-6 d-flex align-items-center gap-2">
+                            <span class="d-inline-block rounded palette-not-visited" style="width:16px;height:16px;"></span> Not Visited
+                        </div>
+                    </div>
+                </div>
+
+                <button type="button" class="btn btn-success w-100 fw-semibold" onclick="openSubmitModal()">
+                    <i class="bi bi-check2-circle me-1"></i>Finish &amp; Submit Exam
+                </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- Bootstrap 5 Exam Submission Confirmation Modal (works reliably inside iframes) -->
+<div class="modal fade" id="submitExamModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title fw-bold"><i class="bi bi-send-check me-2"></i>Finish &amp; Submit Exam?</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3">Please review your attempt summary before final submission. Once submitted, answers cannot be changed.</p>
+                <div class="row g-2 text-center mb-2">
+                    <div class="col-4">
+                        <div class="p-2 rounded bg-success bg-opacity-10 border border-success border-opacity-25">
+                            <div class="fs-4 fw-bold text-success" id="summaryAnswered">0</div>
+                            <div class="small text-muted">Answered</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 rounded bg-primary bg-opacity-10 border border-primary border-opacity-25">
+                            <div class="fs-4 fw-bold text-primary" id="summaryReview">0</div>
+                            <div class="small text-muted">For Review</div>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="p-2 rounded bg-danger bg-opacity-10 border border-danger border-opacity-25">
+                            <div class="fs-4 fw-bold text-danger" id="summaryUnanswered">0</div>
+                            <div class="small text-muted">Unanswered</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Return to Exam</button>
+                <button type="button" id="confirmFinalSubmitBtn" class="btn btn-success fw-semibold px-4" onclick="executeFinalSubmit()">
+                    <i class="bi bi-check-lg me-1"></i>Confirm &amp; Submit
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const totalSlides = {{ question_items|length }};
+    let currentSlide = 0;
+    let remainingSeconds = {{ remaining_seconds }};
+    let isSubmitting = false;
+    let examStarted = true;
+    let fullscreenSupportedAndActive = false;
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    function getSlide(idx) {
+        return document.getElementById(`qSlide-${idx}`);
+    }
+
+    function isSlideAnswered(slide) {
+        const qtype = slide.dataset.qtype;
+        if (qtype === 'MCQ') {
+            return !!slide.querySelector('input[type="radio"]:checked');
+        }
+        const inp = slide.querySelector('input[type="text"], textarea');
+        return inp && inp.value.trim().length > 0;
+    }
+
+    function refreshPalette() {
+        for (let i = 0; i < totalSlides; i++) {
+            const slide = getSlide(i);
+            const btn = document.getElementById(`paletteBtn-${i}`);
+            const answered = isSlideAnswered(slide);
+            const review = slide.dataset.review === '1';
+            const visited = slide.dataset.visited === '1';
+
+            btn.className = 'palette-btn';
+            if (answered && review) {
+                btn.classList.add('palette-answered-review');
+            } else if (review) {
+                btn.classList.add('palette-review');
+            } else if (answered) {
+                btn.classList.add('palette-answered');
+            } else if (visited) {
+                btn.classList.add('palette-unanswered');
+            } else {
+                btn.classList.add('palette-not-visited');
+            }
+
+            if (i === currentSlide) {
+                btn.classList.add('palette-active');
+            }
+        }
+        const curr = getSlide(currentSlide);
+        document.getElementById('reviewBtnLabel').textContent =
+            curr.dataset.review === '1' ? 'Unmark Review' : 'Mark for Review';
+        document.getElementById('prevBtn').disabled = currentSlide === 0;
+        document.getElementById('nextBtn').disabled = currentSlide === totalSlides - 1;
+    }
+
+    function saveSlideAnswer(idx) {
+        const slide = getSlide(idx);
+        if (!slide) return;
+        const qid = slide.dataset.qid;
+        const qtype = slide.dataset.qtype;
+        let selectedOption = '';
+        let textAnswer = '';
+        if (qtype === 'MCQ') {
+            const checked = slide.querySelector('input[type="radio"]:checked');
+            selectedOption = checked ? checked.value : '';
+        } else {
+            const inp = slide.querySelector('input[type="text"], textarea');
+            textAnswer = inp ? inp.value : '';
+        }
+
+        fetch("{% url 'save_exam_answer' attempt.id %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                question_id: qid,
+                selected_option: selectedOption,
+                text_answer: textAnswer,
+                is_marked_for_review: slide.dataset.review === '1',
+                is_visited: true
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.terminated) {
+                handleForcedExamClose(data.reason, data.redirect_url);
+                return;
+            }
+            if (data && typeof data.remaining_seconds === 'number' && window.examTimer) {
+                window.examTimer.sync(data.remaining_seconds);
+            }
+        })
+        .catch(() => {});
+    }
+
+    function goToSlide(idx) {
+        if (idx < 0 || idx >= totalSlides) return;
+        saveSlideAnswer(currentSlide);
+        getSlide(currentSlide).classList.add('d-none');
+        currentSlide = idx;
+        const nextSlide = getSlide(currentSlide);
+        nextSlide.dataset.visited = '1';
+        nextSlide.classList.remove('d-none');
+        refreshPalette();
+        saveSlideAnswer(currentSlide);
+    }
+
+    function changeSlide(delta) {
+        goToSlide(currentSlide + delta);
+    }
+
+    function toggleReview() {
+        const slide = getSlide(currentSlide);
+        slide.dataset.review = slide.dataset.review === '1' ? '0' : '1';
+        refreshPalette();
+        saveSlideAnswer(currentSlide);
+    }
+
+    function clearCurrentAnswer() {
+        const slide = getSlide(currentSlide);
+        slide.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+        slide.querySelectorAll('input[type="text"], textarea').forEach(t => t.value = '');
+        refreshPalette();
+        saveSlideAnswer(currentSlide);
+    }
+
+    document.querySelectorAll('.q-input').forEach(el => {
+        el.addEventListener('change', () => {
+            refreshPalette();
+            saveSlideAnswer(currentSlide);
+        });
+        el.addEventListener('input', () => {
+            refreshPalette();
+        });
+    });
+
+    function openSubmitModal() {
+        saveSlideAnswer(currentSlide);
+        let answered = 0;
+        let review = 0;
+        let unanswered = 0;
+        for (let i = 0; i < totalSlides; i++) {
+            const slide = getSlide(i);
+            if (isSlideAnswered(slide)) {
+                answered += 1;
+            } else {
+                unanswered += 1;
+            }
+            if (slide.dataset.review === '1') {
+                review += 1;
+            }
+        }
+        document.getElementById('summaryAnswered').textContent = answered;
+        document.getElementById('summaryReview').textContent = review;
+        document.getElementById('summaryUnanswered').textContent = unanswered;
+
+        const modalEl = document.getElementById('submitExamModal');
+        if (window.bootstrap && bootstrap.Modal) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        } else {
+            executeFinalSubmit();
+        }
+    }
+
+    function executeFinalSubmit() {
+        if (isSubmitting) return;
+        isSubmitting = true;
+        const btn = document.getElementById('confirmFinalSubmitBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Submitting...';
+        }
+        if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+        }
+        document.getElementById('examForm').submit();
+    }
+
+    // Full-Screen Secure Exam Controls
+    function requestExamFullscreen() {
+        const elem = document.documentElement;
+        const req = elem.requestFullscreen || elem.webkitRequestFullscreen || elem.msRequestFullscreen;
+        if (req) {
+            try {
+                const res = req.call(elem);
+                if (res && typeof res.then === 'function') {
+                    res.then(() => {
+                        fullscreenSupportedAndActive = true;
+                        updateFullscreenUI();
+                    }).catch(() => {
+                        updateFullscreenUI();
+                    });
+                }
+            } catch (e) {
+                updateFullscreenUI();
+            }
+        }
+    }
+
+    function updateFullscreenUI() {
+        const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        const exitAlert = document.getElementById('fullscreenExitAlert');
+        const fsLabel = document.getElementById('fsBtnLabel');
+        if (isFs) {
+            fullscreenSupportedAndActive = true;
+            exitAlert.classList.add('d-none');
+            exitAlert.classList.remove('d-flex');
+            fsLabel.textContent = 'Full-Screen Active';
+        } else {
+            fsLabel.textContent = 'Enter Full Screen';
+            if (fullscreenSupportedAndActive && examStarted && !isSubmitting) {
+                exitAlert.classList.remove('d-none');
+                exitAlert.classList.add('d-flex');
+            }
+        }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+        const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+        updateFullscreenUI();
+        if (!isFs && fullscreenSupportedAndActive && examStarted && !isSubmitting) {
+            reportViolation('Exited full-screen exam mode');
+        }
+    });
+
+    // Attempt fullscreen immediately on entry and on first interaction if browser requires gesture
+    window.addEventListener('DOMContentLoaded', () => {
+        requestExamFullscreen();
+    });
+    document.addEventListener('pointerdown', function autoFsOnFirstTouch() {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement && !isSubmitting) {
+            requestExamFullscreen();
+        }
+    }, { once: true });
+
+    // Deter right-click and copy/paste during exam
+    document.addEventListener('contextmenu', e => e.preventDefault());
+    document.addEventListener('copy', e => e.preventDefault());
+
+    function reportViolation(reason) {
+        if (isSubmitting || !examStarted) return;
+        fetch("{% url 'log_tab_switch' attempt.id %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({ reason: reason })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.count !== undefined) {
+                document.getElementById('tabSwitchCount').textContent = data.count;
+                document.getElementById('alertViolationCount').textContent = data.count;
+                document.getElementById('antiCheatAlert').classList.remove('d-none');
+            }
+            if (data.terminated || data.auto_submitted) {
+                handleForcedExamClose(data.reason, data.redirect_url);
+            }
+        })
+        .catch(() => {});
+    }
+
+    // Drift-free Server-Synced Countdown Timer Component
+    const ExamCountdownTimer = (function () {
+        const totalDurationSeconds = Math.max(1, {{ exam.duration_minutes }} * 60);
+        let endTimestampMs = Date.now() + (Math.max(0, remainingSeconds) * 1000);
+        let timerInterval = null;
+
+        const headerDisplay = document.getElementById('timerDisplay');
+        const sidebarDisplay = document.getElementById('timerSidebarDisplay');
+        const timerBox = document.getElementById('timerBox');
+        const progressBar = document.getElementById('timerProgressBar');
+        const statusBadge = document.getElementById('timerStatusBadge');
+        const lowWarning = document.getElementById('timerLowWarning');
+        const expiredBanner = document.getElementById('timeExpiredBanner');
+
+        function formatTime(secs) {
+            const clamped = Math.max(0, Math.floor(secs));
+            const hrs = Math.floor(clamped / 3600);
+            const mins = Math.floor((clamped % 3600) / 60);
+            const remSecs = clamped % 60;
+            if (hrs > 0) {
+                return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(remSecs).padStart(2, '0')}`;
+            }
+            return `${String(mins).padStart(2, '0')}:${String(remSecs).padStart(2, '0')}`;
+        }
+
+        function triggerAutoSubmit() {
+            if (isSubmitting) return;
+            isSubmitting = true;
+            if (timerInterval) clearInterval(timerInterval);
+
+            if (expiredBanner) expiredBanner.classList.remove('d-none');
+            if (statusBadge) {
+                statusBadge.className = 'badge bg-danger';
+                statusBadge.textContent = 'Time Up';
+            }
+            if (document.fullscreenElement && document.exitFullscreen) {
+                document.exitFullscreen().catch(() => {});
+            }
+            document.getElementById('autoSubmittedInput').value = '1';
+            document.getElementById('examForm').submit();
+        }
+
+        function tick() {
+            const secsLeft = Math.max(0, Math.ceil((endTimestampMs - Date.now()) / 1000));
+            const formatted = formatTime(secsLeft);
+            if (headerDisplay) headerDisplay.textContent = formatted;
+            if (sidebarDisplay) sidebarDisplay.textContent = formatted;
+
+            const pct = Math.max(0, Math.min(100, (secsLeft / totalDurationSeconds) * 100));
+            if (progressBar) progressBar.style.width = `${pct.toFixed(1)}%`;
+
+            if (secsLeft <= 60) {
+                if (timerBox) {
+                    timerBox.classList.remove('bg-dark', 'bg-warning', 'text-dark');
+                    timerBox.classList.add('bg-danger', 'text-white');
+                }
+                if (progressBar) {
+                    progressBar.classList.remove('bg-primary', 'bg-warning');
+                    progressBar.classList.add('bg-danger');
+                }
+                if (statusBadge) {
+                    statusBadge.className = 'badge bg-danger';
+                    statusBadge.textContent = 'Critical';
+                }
+                if (lowWarning) lowWarning.classList.remove('d-none');
+            } else if (secsLeft <= Math.min(120, totalDurationSeconds * 0.2)) {
+                if (timerBox) {
+                    timerBox.classList.remove('bg-dark', 'bg-danger', 'text-white');
+                    timerBox.classList.add('bg-warning', 'text-dark');
+                }
+                if (progressBar) {
+                    progressBar.classList.remove('bg-primary', 'bg-danger');
+                    progressBar.classList.add('bg-warning');
+                }
+                if (statusBadge) {
+                    statusBadge.className = 'badge bg-warning text-dark';
+                    statusBadge.textContent = 'Hurry';
+                }
+            }
+
+            if (secsLeft <= 0) {
+                triggerAutoSubmit();
+            }
+        }
+
+        function sync(serverRemainingSeconds) {
+            if (typeof serverRemainingSeconds === 'number' && !Number.isNaN(serverRemainingSeconds)) {
+                endTimestampMs = Date.now() + (Math.max(0, serverRemainingSeconds) * 1000);
+                tick();
+            }
+        }
+
+        tick();
+        timerInterval = setInterval(tick, 500);
+        return { sync, tick };
+    })();
+    window.examTimer = ExamCountdownTimer;
+
+    // Tab-switch anti-cheating detection
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && !isSubmitting) {
+            reportViolation('Browser tab hidden / switched');
+        }
+    });
+
+    // Multi-Device / Second-Phone Anti-Cheat Lock & Instant Auto-Submit + Close
+    let heartbeatInterval = null;
+    function handleForcedExamClose(reason, redirectUrl) {
+        if (isSubmitting) return;
+        isSubmitting = true;
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+
+        const banner = document.getElementById('multiDeviceClosedBanner');
+        const reasonSpan = document.getElementById('multiDeviceReason');
+        if (banner) {
+            if (reasonSpan && reason) reasonSpan.textContent = reason;
+            banner.classList.remove('d-none');
+        }
+        if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+        }
+        setTimeout(() => {
+            try { window.close(); } catch (e) {}
+            window.location.href = redirectUrl || "{% url 'exam_result' attempt.id %}";
+        }, 450);
+    }
+
+    function checkExamHeartbeat() {
+        if (isSubmitting || !examStarted) return;
+        fetch("{% url 'exam_heartbeat' attempt.id %}", {
+            method: 'GET',
+            cache: 'no-store'
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data && data.terminated) {
+                handleForcedExamClose(data.reason, data.redirect_url);
+                return;
+            }
+            if (data && typeof data.remaining_seconds === 'number' && window.examTimer) {
+                window.examTimer.sync(data.remaining_seconds);
+            }
+        })
+        .catch(() => {});
+    }
+
+    heartbeatInterval = setInterval(checkExamHeartbeat, 2500);
+    window.addEventListener('focus', checkExamHeartbeat);
+
+    refreshPalette();
+</script>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}Printable Question Paper — {{ exam.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    @media print {
+        .paper-sheet {
+            border: none !important;
+            padding: 0 !important;
+        }
+    }
+    .answer-key-box {
+        border-left: 4px solid #16a34a;
+        background-color: #f0fdf4;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4 no-print">
+    <div>
+        <h3 class="fw-bold mb-0">Printable Question Paper</h3>
+        <p class="text-muted small mb-0">Toggle Answer Key visibility before printing or exporting to PDF.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <button type="button" id="toggleKeyBtn" class="btn btn-outline-success" onclick="toggleAnswerKey()">
+            <i class="bi bi-key me-1"></i><span id="toggleKeyLabel">{% if show_key %}Hide{% else %}Show{% endif %} Answer Key</span>
+        </button>
+        <a href="{% url 'format_paper_generator_for_exam' exam.id %}" class="btn btn-outline-dark">
+            <i class="bi bi-file-earmark-word me-1"></i>Upload Format (Word &amp; PDF)
+        </a>
+        <button type="button" onclick="acadexPrint('question_paper_{{ exam.id }}.html')" class="btn btn-primary">
+            <i class="bi bi-printer me-1"></i>Print Paper / Save PDF
+        </button>
+        <a href="{% url 'exam_list' %}" class="btn btn-outline-secondary">Back</a>
+    </div>
+</div>
+
+<div class="card p-4 p-md-5 paper-sheet bg-white">
+    <div class="text-center border-bottom border-dark pb-3 mb-4">
+        <h4 class="fw-bold text-uppercase mb-1">Acadex Institution of Management & Commerce</h4>
+        <h5 class="fw-semibold mb-2">{{ exam.title }}</h5>
+        <div class="d-flex flex-wrap justify-content-between small fw-semibold mt-3 px-2">
+            <span>Class / Program: {{ exam.academic_class.name }}</span>
+            <span>Subject: {{ exam.subject.code }} - {{ exam.subject.name }}</span>
+            <span>Duration: {{ exam.duration_minutes }} Minutes</span>
+            <span>Max Marks: {{ exam.total_marks }}</span>
+        </div>
+    </div>
+
+    {% if exam.instructions %}
+    <div class="small bg-light border rounded p-2 px-3 mb-4">
+        <strong>General Instructions:</strong> {{ exam.instructions }}
+    </div>
+    {% endif %}
+
+    <div class="d-flex flex-column gap-4">
+        {% for eq in exam_questions %}
+        {% with q=eq.question %}
+        <div class="question-block pb-3 border-bottom">
+            <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+                <div class="fw-semibold">
+                    <span class="me-1">Q{{ forloop.counter }}.</span>
+                    <span>{{ q.prompt|linebreaksbr }}</span>
+                </div>
+                <span class="badge bg-light text-dark border text-nowrap">[{{ q.marks }} Marks]</span>
+            </div>
+
+            {% if q.question_type == 'MCQ' %}
+            <div class="row g-2 ps-4 small mt-1">
+                <div class="col-6"><strong>(A)</strong> {{ q.option_a }}</div>
+                <div class="col-6"><strong>(B)</strong> {{ q.option_b }}</div>
+                {% if q.option_c %}<div class="col-6"><strong>(C)</strong> {{ q.option_c }}</div>{% endif %}
+                {% if q.option_d %}<div class="col-6"><strong>(D)</strong> {{ q.option_d }}</div>{% endif %}
+            </div>
+            {% elif q.question_type == 'FITB' %}
+            <div class="ps-4 mt-2 small text-muted">
+                Answer: ______________________________________________________
+            </div>
+            {% else %}
+            <div class="ps-4 mt-3">
+                <div class="border-bottom mb-3" style="height: 22px;"></div>
+                <div class="border-bottom mb-3" style="height: 22px;"></div>
+                <div class="border-bottom" style="height: 22px;"></div>
+            </div>
+            {% endif %}
+
+            <div class="answer-key-item answer-key-box p-2 px-3 mt-3 small rounded {% if not show_key %}d-none{% endif %}">
+                <strong class="text-success">Answer Key:</strong> {{ q.get_correct_display }}
+            </div>
+        </div>
+        {% endwith %}
+        {% empty %}
+        <div class="text-center text-muted py-4">No questions attached to this exam yet.</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function toggleAnswerKey() {
+        const items = document.querySelectorAll('.answer-key-item');
+        const label = document.getElementById('toggleKeyLabel');
+        if (items.length === 0) return;
+        const currentlyHidden = items[0].classList.contains('d-none');
+        items.forEach(el => el.classList.toggle('d-none', !currentlyHidden));
+        label.textContent = currentlyHidden ? 'Hide Answer Key' : 'Show Answer Key';
+        if (currentlyHidden && window.MathJax && window.MathJax.typesetPromise) {
+            MathJax.typesetPromise(Array.from(items)).catch(() => {});
+        }
+    }
+</script>
+{% endblock %}
