@@ -89,6 +89,9 @@
                             <td>{{ cls.student_count }}</td>
                             <td>{{ cls.subject_count }}</td>
                         </tr>
+                        <td>
+            <!-- ADD THE EDIT LINK HERE -->
+            <a href="{% url 'edit_subject' subject.id %}" class="btn btn-sm btn-warning">Edit</a></td>td
                         {% empty %}
                         <tr><td colspan="4" class="text-center text-muted py-4">No classes yet. Upload an Excel sheet or create one.</td></tr>
                         {% endfor %}
