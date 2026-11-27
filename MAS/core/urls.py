@@ -9,6 +9,8 @@ urlpatterns = [
     path('force-password-change/', views.force_password_change_view, name='force_password_change'),
     path('profile/', views.profile_view, name='profile'),
     path('dashboard/', views.dashboard_view, name='dashboard'),
+    path('subject/<int:pk>/edit/', views.edit_subject, name='edit_subject'),
+    path('class/<int:pk>/edit/', views.edit_class, name='edit_class'),
 
     # Super Admin: Bulk Excel Onboarding, Printable Roster, Users & Classes
     path('onboarding/', views.bulk_onboarding_view, name='bulk_onboarding'),
