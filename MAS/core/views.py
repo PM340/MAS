@@ -24,7 +24,7 @@ from .context_processors import get_unread_message_count, get_visible_messages_f
 from .decorators import role_required
 from .forms import (
     AcademicClassForm,
-    AdminUserEditForm,
+    AdminUserForm,
     AssignmentForm,
     AssignmentGradeForm,
     AssignmentSubmissionForm,
@@ -62,6 +62,7 @@ from .models import (
     MessageReadReceipt,
     Question,
     Subject,
+    StudentClass
 )
 
 
@@ -149,7 +150,22 @@ def login_view(request):
             messages.error(request, 'Invalid Roll Number / System ID or password.')
 
     return render(request, 'auth/login.html', {'form': form})
+def edit_subject(request, pk):
+    subject = get_object_or_404(Subject, pk=pk)
+    if request.method == 'POST':
+        subject.title = request.POST.get('title')  # Adjust field names to match models.py
+        subject.code = request.POST.get('code')
+        subject.save()
+        return redirect('dashboard')  # Replace with your redirect URL name
+    return render(request, 'edit_subject.html', {'subject': subject})
 
+def edit_class(request, pk):
+    student_class = get_object_or_404(StudentClass, pk=pk)
+    if request.method == 'POST':
+        student_class.name = request.POST.get('name')  # Adjust field names to match models.py
+        student_class.save()
+        return redirect('dashboard')  # Replace with your redirect URL name
+    return render(request, 'edit_class.html', {'student_class': student_class})
 
 @login_required
 def logout_view(request):
@@ -667,10 +683,10 @@ def manage_users_view(request):
 
 
 @role_required(CustomUser.ROLE_ADMIN)
-def edit_user_view(request, user_id):
-    """Super Admin full profile editor for Students, Teachers, and Admins."""
+def _user_view(request, user_id):
+    """Super Admin full profile or for Students, Teachers, and Admins."""
     target = get_object_or_404(CustomUser.objects.prefetch_related('assigned_classes'), id=user_id)
-    form = AdminUserEditForm(request.POST or None, instance=target)
+    form = AdminUserForm(request.POST or None, instance=target)
 
     if request.method == 'POST' and form.is_valid():
         updated = form.save(commit=False)
@@ -694,7 +710,7 @@ def edit_user_view(request, user_id):
         messages.success(request, f'Profile updated for {updated.roll_number} ({updated.full_name}).')
         return redirect('manage_users')
 
-    return render(request, 'admin_panel/edit_user.html', {
+    return render(request, 'admin_panel/_user.html', {
         'target': target,
         'form': form,
     })
@@ -818,18 +834,18 @@ def question_create_view(request):
         question.save()
         messages.success(request, 'Question added to the Question Bank.')
         return redirect('question_bank')
-    return render(request, 'exams/question_form.html', {'form': form, 'is_edit': False})
+    return render(request, 'exams/question_form.html', {'form': form, 'is_': False})
 
 
 @role_required(CustomUser.ROLE_ADMIN, CustomUser.ROLE_TEACHER)
-def question_edit_view(request, question_id):
+def question__view(request, question_id):
     question = get_object_or_404(Question, id=question_id)
     form = QuestionForm(request.POST or None, instance=question)
     if request.method == 'POST' and form.is_valid():
         form.save()
         messages.success(request, f'Question #{question.id} updated.')
         return redirect('question_bank')
-    return render(request, 'exams/question_form.html', {'form': form, 'is_edit': True, 'question': question})
+    return render(request, 'exams/question_form.html', {'form': form, 'is_': True, 'question': question})
 
 
 @role_required(CustomUser.ROLE_ADMIN)
@@ -843,7 +859,7 @@ def question_delete_view(request, question_id):
 
 @role_required(CustomUser.ROLE_ADMIN, CustomUser.ROLE_TEACHER)
 def question_import_pdf_view(request):
-    """Upload a PDF, automatically recognize questions + math symbols, preview/edit, and bulk-save."""
+    """Upload a PDF, automatically recognize questions + math symbols, preview/, and bulk-save."""
     if request.GET.get('clear') == '1':
         for k in ('pdf_extracted_questions', 'pdf_import_subject_id', 'pdf_import_engine', 'pdf_import_filename'):
             request.session.pop(k, None)
@@ -1011,11 +1027,11 @@ def exam_create_view(request):
         messages.success(request, f'Exam "{exam.title}" created with {exam.question_count} questions.')
         return redirect('exam_list')
 
-    return render(request, 'exams/exam_form.html', {'form': form, 'is_edit': False})
+    return render(request, 'exams/exam_form.html', {'form': form, 'is_': False})
 
 
 @role_required(CustomUser.ROLE_ADMIN, CustomUser.ROLE_TEACHER)
-def exam_edit_view(request, exam_id):
+def exam__view(request, exam_id):
     exam = get_object_or_404(Exam, id=exam_id)
     initial_q_ids = list(exam.exam_questions.values_list('question_id', flat=True))
     form = ExamForm(request.POST or None, instance=exam, initial={'selected_questions': initial_q_ids})
@@ -1029,7 +1045,7 @@ def exam_edit_view(request, exam_id):
         messages.success(request, f'Exam "{exam.title}" updated.')
         return redirect('exam_list')
 
-    return render(request, 'exams/exam_form.html', {'form': form, 'is_edit': True, 'exam': exam})
+    return render(request, 'exams/exam_form.html', {'form': form, 'is_': True, 'exam': exam})
 
 
 @role_required(CustomUser.ROLE_ADMIN, CustomUser.ROLE_TEACHER)
